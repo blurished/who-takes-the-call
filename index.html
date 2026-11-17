@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Who Takes the Call?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout idea: an intake desk. The incoming case ticket sits left; a fresh directory of 12 offices, dealt from a bank of 64, fills the right each round. */
+  --ground:#E9EDF2; --surface:#FFFFFF; --ink:#16213A; --muted:#4D5872; --rule:#C4CCD8;
+  --stamp:#B3261E; --good:#1D7A46;
+  --local:#B86E0A; --state:#16756B; --national:#1E3A6B; --intl:#7A3B6E;
+  --local-tint:#FCEFD9; --state-tint:#DDF1EE; --national-tint:#DFE7F5; --intl-tint:#F3E3EF;
+  --display:'Big Shoulders Display','Arial Narrow',sans-serif;
+  --body:'Public Sans',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  color-scheme: light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body)}
+button{font-family:inherit}
+:focus-visible{outline:3px solid var(--stamp);outline-offset:3px}
+.wrap{max-width:1500px;margin:0 auto;padding:20px clamp(16px,3vw,36px) 40px;display:flex;flex-direction:column;gap:18px}
+.bar{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px 28px;border-bottom:3px solid var(--ink);padding-bottom:14px}
+.brand{display:flex;flex-direction:column;gap:2px}
+.eyebrow{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+h1{margin:0;font-family:var(--display);font-weight:900;font-size:clamp(44px,6vw,76px);line-height:.88;text-transform:uppercase;text-wrap:balance}
+.meters{display:flex;flex-wrap:wrap;gap:10px}
+.meter{background:var(--surface);border:2px solid var(--ink);border-radius:6px;padding:6px 14px;min-width:92px;display:flex;flex-direction:column}
+.meter b{font-family:var(--display);font-weight:800;font-size:32px;line-height:1;font-variant-numeric:tabular-nums}
+.meter span{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.meter.active{background:var(--ink);color:#fff}.meter.active span{color:#C9D2E3}
+.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;font-size:15px;color:var(--muted)}
+.ctl{display:flex;align-items:center;gap:8px}
+.seg{display:inline-flex;border:2px solid var(--ink);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--ink);font-weight:700;font-size:14px;padding:8px 13px;min-height:40px;cursor:pointer}
+.seg button+button{border-left:2px solid var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.textbtn{border:2px solid var(--ink);background:transparent;color:var(--ink);font-weight:700;font-size:14px;padding:8px 14px;border-radius:6px;min-height:40px;cursor:pointer}
+.textbtn:hover{background:var(--surface)}
+.textbtn[aria-pressed="true"]{background:var(--ink);color:#fff}
+.desk{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.left{flex:1 1 380px;max-width:520px;display:flex;flex-direction:column;gap:16px;position:sticky;top:12px}
+.right{flex:999 1 640px;min-width:0}
+@media (max-width:900px){.left{position:static;max-width:none}}
+.ticket{background:var(--surface);border:2px solid var(--ink);border-radius:4px;box-shadow:6px 6px 0 var(--ink);position:relative;overflow:hidden}
+.ticket-head{display:flex;justify-content:space-between;gap:10px;padding:12px 18px;border-bottom:2px dashed var(--rule);font-family:var(--mono);font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.04em}
+.ticket-body{padding:20px 22px 24px;display:flex;flex-direction:column;gap:14px}
+.channel{display:inline-flex;align-self:flex-start;font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;border:2px solid var(--ink);border-radius:999px;padding:4px 12px}
+.from{font-weight:700;font-size:17px;color:var(--muted)}
+.event{margin:0;font-size:clamp(22px,2.1vw,28px);line-height:1.35;font-weight:600;text-wrap:pretty}
+.prompt{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.04em;text-transform:uppercase;color:var(--stamp)}
+.stamp{position:absolute;right:18px;top:54px;font-family:var(--display);font-weight:900;font-size:40px;letter-spacing:.06em;text-transform:uppercase;border:4px solid currentColor;padding:2px 12px;border-radius:6px;transform:rotate(-8deg);opacity:.92;background:rgba(255,255,255,.85)}
+.stamp.ok{color:var(--good)}.stamp.no{color:var(--stamp)}
+@media (prefers-reduced-motion:no-preference){
+  .stamp{animation:thump .28s ease-out}
+  @keyframes thump{from{transform:rotate(-8deg) scale(1.5);opacity:0}to{transform:rotate(-8deg) scale(1);opacity:.92}}
+  .ticket.enter{animation:slide .35s ease-out}
+  @keyframes slide{from{transform:translateY(-10px);opacity:.3}to{transform:none;opacity:1}}
+  .cols.deal .card{animation:deal .32s ease-out both}
+  @keyframes deal{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+}
+.feedback{background:var(--surface);border:2px solid var(--ink);border-radius:4px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.feedback h2{margin:0;font-family:var(--display);font-weight:800;font-size:28px;line-height:1;text-transform:uppercase}
+.feedback p{margin:0;font-size:16px;line-height:1.5}
+.feedback .who{font-weight:700}
+.next{align-self:flex-start;border:0;background:var(--ink);color:#fff;font-weight:800;font-size:17px;padding:12px 22px;border-radius:6px;min-height:48px;cursor:pointer}
+.next:hover{background:#0B1326}
+.hint{font-size:15px;color:var(--muted);line-height:1.45;margin:0}
+.dir-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 16px;margin-bottom:12px}
+.dir-head h2{margin:0;font-family:var(--display);font-weight:800;font-size:32px;text-transform:uppercase}
+.dir-head p{margin:0;font-size:15px;color:var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+@media (max-width:1100px){.cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.cols{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:10px}
+.col-label{font-family:var(--display);font-weight:900;font-size:26px;letter-spacing:.06em;text-transform:uppercase;padding:6px 12px;border-radius:4px;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.col-label small{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.06em;opacity:.95;text-align:right}
+.lv-local .col-label{background:var(--local)}.lv-state .col-label{background:var(--state)}
+.lv-national .col-label{background:var(--national)}.lv-intl .col-label{background:var(--intl)}
+.card{text-align:left;background:var(--surface);border:2px solid var(--rule);border-top:6px solid var(--lv);border-radius:6px;padding:12px 14px 14px;cursor:pointer;display:flex;flex-direction:column;gap:6px;color:var(--ink);min-height:44px;transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease}
+.card:hover:not(:disabled){border-color:var(--ink);border-top-color:var(--lv);transform:translateY(-2px);box-shadow:0 4px 0 var(--ink)}
+.card .t{font-family:var(--display);font-weight:800;font-size:23px;line-height:1.02;text-transform:uppercase}
+.card .d{font-size:14px;line-height:1.38;font-weight:600}
+.card .l{font-family:var(--mono);font-size:12px;font-weight:500;line-height:1.4;color:var(--muted);display:flex;gap:6px;align-items:flex-start}
+.card .l svg{flex:none;margin-top:1px}
+.card.lv-local{--lv:var(--local)}.card.lv-state{--lv:var(--state)}.card.lv-national{--lv:var(--national)}.card.lv-intl{--lv:var(--intl)}
+.hard .card{--lv:var(--ink)}
+.card.wrong{opacity:.45;cursor:not-allowed;text-decoration:line-through;text-decoration-thickness:2px}
+.card.right{border-color:var(--good);background:#E5F3EA;box-shadow:0 0 0 3px var(--good)}
+.card.reveal{border-color:var(--stamp);box-shadow:0 0 0 3px var(--stamp)}
+.card:disabled{cursor:default}
+.end,.bank{background:var(--surface);border:2px solid var(--ink);box-shadow:6px 6px 0 var(--ink);border-radius:4px;padding:28px clamp(18px,3vw,36px);display:flex;flex-direction:column;gap:22px}
+.end h2,.bank h2{margin:0;font-family:var(--display);font-weight:900;font-size:clamp(40px,5vw,64px);line-height:.9;text-transform:uppercase}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:700px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tile{border:2px solid var(--ink);border-radius:6px;padding:12px 14px;border-top:8px solid var(--lv)}
+.tile b{display:block;font-family:var(--display);font-weight:800;font-size:40px;line-height:1;font-variant-numeric:tabular-nums}
+.tile span{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.review{display:flex;flex-direction:column;gap:10px}
+.review h3,.bank h3{margin:0;font-family:var(--display);font-weight:800;font-size:26px;text-transform:uppercase}
+.rev{border-top:1px solid var(--rule);padding-top:10px;display:flex;flex-direction:column;gap:3px;font-size:16px;line-height:1.45}
+.rev .ans{font-weight:700}
+.end-actions{display:flex;flex-wrap:wrap;gap:12px}
+.bank-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.bank-item{border:2px solid var(--rule);border-top:6px solid var(--lv);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;background:var(--surface)}
+.bank-item .t{font-family:var(--display);font-weight:800;font-size:21px;line-height:1.02;text-transform:uppercase}
+.bank-item .d{font-size:13.5px;font-weight:600;line-height:1.35}
+.bank-item .l{font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.4}
+.bank-sec{display:flex;flex-direction:column;gap:10px}
+.bank-sec h3{color:var(--lv)}
+.chbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;background:var(--ink);color:#fff;border-radius:6px;padding:10px 16px;font-size:15px}
+.chbar span:last-child{color:#C9D2E3}
+.panel{background:var(--surface);border:2px solid var(--ink);box-shadow:6px 6px 0 var(--ink);border-radius:4px;padding:28px clamp(18px,3vw,36px);display:flex;flex-direction:column;gap:18px;max-width:900px}
+.panel h2{margin:0;font-family:var(--display);font-weight:900;font-size:clamp(40px,5vw,60px);line-height:.9;text-transform:uppercase}
+.panel h3{margin:0;font-family:var(--display);font-weight:800;font-size:26px;text-transform:uppercase}
+.rules{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;font-size:17px;line-height:1.45}
+.form{display:flex;flex-direction:column;gap:10px;border-top:2px dashed var(--rule);padding-top:16px}
+.form label{font-weight:700;font-size:15px}
+.form input,.form select{font:inherit;font-size:17px;padding:10px 12px;border:2px solid var(--ink);border-radius:6px;background:#fff;color:var(--ink);min-height:46px;width:100%}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.row>div{display:flex;flex-direction:column;gap:6px}
+.err{margin:0;color:var(--stamp);font-weight:700;font-size:15px;min-height:1px}
+.linkbtn{border:0;background:none;padding:0;color:var(--ink);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
+.okbox{background:#E5F3EA;border:2px solid var(--good);border-radius:6px;padding:12px 14px;font-size:15px;line-height:1.5}
+.okbox code,.panel code{font-family:var(--mono);font-size:14px;background:#fff;padding:1px 5px;border-radius:3px;word-break:break-all}
+.verdict{font-weight:800;font-size:16px;align-self:center}.verdict.good{color:var(--good)}.verdict.bad{color:var(--stamp)}
+.result{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.result>div{border:2px solid var(--ink);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.result span{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.result b{font-family:var(--display);font-weight:900;font-size:36px;line-height:1;word-break:break-word}
+.result .code{background:var(--ink);color:#fff}.result .code span{color:#C9D2E3}.result .code b{font-family:var(--mono);letter-spacing:.12em;font-size:30px}
+[hidden]{display:none !important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="bar">
+    <div class="brand">
+      <div class="eyebrow">Public Administration &amp; International Careers · Intake Desk</div>
+      <h1>Who Takes the Call?</h1>
+    </div>
+    <div class="meters" id="meters" aria-live="polite"></div>
+  </header>
+  <div class="controls" id="controls">
+    <div class="ctl"><span>Players</span><div class="seg" role="group" aria-label="Players">
+      <button type="button" id="mode-solo" aria-pressed="true">Solo</button><button type="button" id="mode-teams" aria-pressed="false">Two teams</button></div></div>
+    <div class="ctl"><span>Levels</span><div class="seg" role="group" aria-label="Difficulty">
+      <button type="button" id="diff-easy" aria-pressed="true">Show</button><button type="button" id="diff-hard" aria-pressed="false">Hide</button></div></div>
+    <div class="ctl"><span>Cases</span><div class="seg" role="group" aria-label="Game length">
+      <button type="button" data-len="12" aria-pressed="true">12</button><button type="button" data-len="20" aria-pressed="false">20</button><button type="button" data-len="32" aria-pressed="false">32</button></div></div>
+    <button type="button" class="textbtn" id="restart">New game</button>
+    <button type="button" class="textbtn" id="bankbtn" aria-pressed="false">Job bank (64)</button>
+    <button type="button" class="textbtn" id="joinbtn">Join a class challenge</button>
+    <button type="button" class="textbtn" id="teachbtn" aria-pressed="false">Teacher: class challenge</button>
+  </div>
+  <main id="main"></main>
+</div>
+<script>
+// [id, level, title, department, location]
+const JOBS = [
+ // ---------- LOCAL ----------
+ ["planner","local","City Planner","City of Dayton · Dept. of Planning, Neighborhoods & Development","Dayton City Hall, downtown Dayton"],
+ ["elections","local","Election Administrator","Montgomery County Board of Elections","Downtown Dayton"],
+ ["welcome","local","Community Engagement Coordinator","City of Dayton · Welcome Dayton","Dayton City Hall, downtown Dayton"],
+ ["police","local","Police Officer","Dayton Police Department","Police districts across Dayton"],
+ ["fire","local","Firefighter / Paramedic","Dayton Fire Department","Fire stations across Dayton"],
+ ["dispatch","local","911 Dispatcher","Local emergency communications (911) center","Montgomery County"],
+ ["water","local","Water Treatment Operator","City of Dayton · Department of Water","Dayton’s water treatment plants"],
+ ["sanitarian","local","Public Health Inspector","Public Health – Dayton & Montgomery County","Dayton"],
+ ["jfs","local","Family Services Caseworker","Montgomery County Job & Family Services","Dayton"],
+ ["library","local","Librarian","Dayton Metro Library","Main Library downtown and neighborhood branches"],
+ ["metroparks","local","Park Naturalist","Five Rivers MetroParks","Parks across Montgomery County"],
+ ["rta","local","Transit Planner","Greater Dayton Regional Transit Authority (RTA)","Dayton"],
+ ["auditor","local","Property Appraiser","Montgomery County Auditor’s Office","Dayton"],
+ ["code","local","Housing Code Inspector","City of Dayton · Housing inspection and code enforcement","Neighborhoods across Dayton"],
+ ["juvprob","local","Juvenile Probation Officer","Montgomery County Juvenile Court","Dayton"],
+ ["citybudget","local","City Budget Analyst","City of Dayton · Finance Department","Dayton City Hall, downtown Dayton"],
+ // ---------- STATE ----------
+ ["aide","state","Legislative Aide","Ohio House of Representatives","Ohio Statehouse, Columbus"],
+ ["ema","state","Emergency Management Planner","Ohio Emergency Management Agency","Columbus"],
+ ["epa","state","Environmental Specialist","Ohio Environmental Protection Agency","Columbus, with district offices around Ohio"],
+ ["trooper","state","State Trooper","Ohio State Highway Patrol","Patrol posts across Ohio"],
+ ["odot","state","Transportation Engineer","Ohio Department of Transportation (ODOT)","Columbus and 12 district offices"],
+ ["odjfs","state","Unemployment Claims Specialist","Ohio Department of Job and Family Services","Columbus"],
+ ["wildlife","state","Wildlife Officer","Ohio Department of Natural Resources · Division of Wildlife","Assigned across Ohio’s counties"],
+ ["ago","state","Consumer Protection Investigator","Ohio Attorney General’s Office","Columbus"],
+ ["sos","state","Elections Analyst","Ohio Secretary of State","Columbus"],
+ ["odh","state","Epidemiologist","Ohio Department of Health","Columbus"],
+ ["odew","state","Education Program Specialist","Ohio Department of Education and Workforce","Columbus"],
+ ["parole","state","Parole Officer","Ohio Dept. of Rehabilitation and Correction · Adult Parole Authority","Offices across Ohio"],
+ ["tax","state","Tax Auditor","Ohio Department of Taxation","Columbus"],
+ ["obm","state","State Budget Analyst","Ohio Office of Budget and Management","Columbus"],
+ ["press","state","Press Secretary","Office of the Governor of Ohio","Columbus"],
+ ["develop","state","Economic Development Specialist","Ohio Department of Development","Columbus"],
+ // ---------- NATIONAL ----------
+ ["fema","national","Disaster Recovery Specialist","FEMA · U.S. Department of Homeland Security","FEMA Region 5 office, Chicago (covers Ohio)"],
+ ["contract","national","Contract Specialist","U.S. Air Force · Air Force Materiel Command","Wright-Patterson Air Force Base, near Dayton"],
+ ["casework","national","Congressional Caseworker","U.S. House of Representatives · a Member’s district office","District office in Dayton"],
+ ["nps","national","Park Ranger","National Park Service","Dayton Aviation Heritage National Historical Park"],
+ ["census","national","Census Field Representative","U.S. Census Bureau","Neighborhoods across the country"],
+ ["ssa","national","Claims Specialist","Social Security Administration","Local field offices, including Dayton"],
+ ["va","national","VA Nurse","U.S. Department of Veterans Affairs","Dayton VA Medical Center"],
+ ["fbi","national","FBI Special Agent","Federal Bureau of Investigation · U.S. Dept. of Justice","Cincinnati Field Office, with agents in Dayton"],
+ ["nws","national","Meteorologist","National Weather Service · NOAA","Forecast office in Wilmington, Ohio"],
+ ["faa","national","Air Traffic Controller","Federal Aviation Administration","Airport control towers, including Dayton International"],
+ ["cbp","national","Customs and Border Protection Officer","U.S. Customs and Border Protection · DHS","Airports, seaports, and borders"],
+ ["nasic","national","Intelligence Analyst","National Air and Space Intelligence Center · U.S. Air Force","Wright-Patterson Air Force Base"],
+ ["usepa","national","Environmental Protection Specialist","U.S. Environmental Protection Agency","EPA Region 5 office, Chicago (covers Ohio)"],
+ ["usps","national","Letter Carrier","U.S. Postal Service","Every community in the country"],
+ ["senate","national","Senate Legislative Assistant","U.S. Senate · a senator’s office","U.S. Capitol, Washington, D.C."],
+ ["clerk","national","Federal Law Clerk","U.S. District Court for the Southern District of Ohio","Federal courthouse in Dayton"],
+ // ---------- INTERNATIONAL ----------
+ ["fso","intl","Foreign Service Officer","U.S. Department of State","U.S. embassies and consulates worldwide"],
+ ["unhcr","intl","Refugee Protection Officer","UNHCR, the UN Refugee Agency","Geneva, Switzerland, plus field offices worldwide"],
+ ["interp","intl","UN Interpreter","United Nations · Dept. for General Assembly & Conference Management","UN Headquarters, New York City"],
+ ["peacecorps","intl","Peace Corps Volunteer","Peace Corps","Communities in host countries around the world"],
+ ["wfp","intl","Humanitarian Logistics Officer","UN World Food Programme","Headquarters in Rome, Italy, plus crisis zones"],
+ ["who","intl","Global Health Officer","World Health Organization","Geneva, Switzerland"],
+ ["unicef","intl","Education Specialist","UNICEF","Headquarters in New York City, plus country offices"],
+ ["wto","intl","Trade Economist","World Trade Organization","Geneva, Switzerland"],
+ ["resettle","intl","Refugee Resettlement Caseworker","A nonprofit refugee resettlement agency","Dayton and cities across the U.S."],
+ ["ohchr","intl","Human Rights Officer","UN Human Rights Office","Geneva, Switzerland"],
+ ["osce","intl","Election Observer","OSCE Office for Democratic Institutions and Human Rights","Warsaw, Poland, plus election missions"],
+ ["peacekeep","intl","Peacekeeping Civil Affairs Officer","UN Department of Peace Operations","UN peacekeeping missions in conflict zones"],
+ ["worldbank","intl","Development Economist","World Bank Group","Washington, D.C., plus country offices"],
+ ["icrc","intl","Red Cross Delegate","International Committee of the Red Cross","Geneva, Switzerland, plus conflict zones"],
+ ["nato","intl","NATO Policy Officer","NATO International Staff","Brussels, Belgium"],
+ ["iaea","intl","Nuclear Safeguards Inspector","International Atomic Energy Agency","Vienna, Austria"]
+];
+
+// [jobId, channel, from, case text, why]
+const CASES = [
+ // ---------- LOCAL ----------
+ ["planner","Neighborhood meeting","Ms. Harris, Westwood resident","“There’s been a vacant lot on my street for ten years. Why can’t we turn it into a community garden?”","Planners decide how land is used: which lots become housing, parks, gardens, or shops."],
+ ["planner","Public hearing","Residents near a city park","A developer wants to build 80 apartments next to a park. Neighbors worry about traffic and losing green space.","Planners review new buildings, study traffic and zoning, and recommend a decision to city leaders."],
+ ["elections","Phone call","Jasmine, age 17","“I turn 18 before the November election. Can I register to vote now, and where do I go?”","Election administrators run voter registration and answer questions about who can vote and how."],
+ ["elections","Emergency alert","Poll worker, 6:15 AM","A polling location lost power on Election Day morning, and voters are already lined up outside.","Election administrators keep voting running on Election Day, including backup plans when something breaks."],
+ ["welcome","Walk-in","A family new to Dayton","A family that just arrived from Guatemala needs English classes and a doctor who speaks Spanish.","Welcome Dayton connects immigrant and refugee families to services, schools, and neighbors."],
+ ["welcome","Email","Leaders of a new community center","Leaders of a new Afghan community center want to meet city commissioners and learn how to take part in city decisions.","Community engagement staff build bridges between residents, including newcomers, and City Hall."],
+ ["police","Phone call","A corner store owner","“Someone broke into my store last night and took the cash register.”","Police officers respond to crimes, investigate, and work to keep neighborhoods safe."],
+ ["police","Neighborhood meeting","Parents near an elementary school","Cars speed past the school every morning, and parents want officers to help slow them down.","Police enforce traffic laws and work with neighborhoods on safety problems."],
+ ["fire","Emergency call, 3:10 AM","A neighbor on Salem Avenue","Smoke is pouring out of a house, and a family may still be inside.","Firefighters rescue people from fires and put them out."],
+ ["fire","School request","An elementary school principal","A school wants someone to teach students how to make a home fire escape plan.","Firefighters also teach fire safety so emergencies never happen."],
+ ["dispatch","911 call","A panicked granddaughter","“My grandfather collapsed and isn’t breathing. I don’t know what to do!”","911 dispatchers send help and coach callers through first aid until it arrives."],
+ ["dispatch","Radio traffic","Storm night, 11:40 PM","Dozens of calls about downed trees, power lines, and car crashes come in at the same time.","Dispatchers decide which emergency gets help first and send the right responders."],
+ ["water","Phone call","Residents on one street","“Our tap water came out brown this morning. Is it safe to drink?”","Water operators test and treat drinking water and track down problems in the system."],
+ ["water","Lab report","Plant laboratory, 5:00 AM","After heavy rain, water coming into the plant is much muddier than usual.","Operators adjust treatment so the water that reaches homes stays safe."],
+ ["sanitarian","Complaint","A restaurant customer","“I got sick after eating at a restaurant, and the kitchen looked filthy.”","Health inspectors check restaurants and enforce food-safety rules."],
+ ["sanitarian","Phone call","A worried parent","A family’s old rental may have lead paint, and their toddler has been chewing on the windowsills.","Public health workers test homes for hazards like lead that can harm children."],
+ ["jfs","Hotline call","A middle school teacher","A teacher is worried that a student comes to school hungry every day in the same clothes.","Family services caseworkers check on children’s safety and connect families to help."],
+ ["jfs","Walk-in","A grandmother raising three grandkids","She just took in her three grandchildren and needs help paying for food and child care.","County Job & Family Services helps families get food assistance, child care, and other support."],
+ ["library","Walk-in","A man looking for work","He has no internet at home and needs help filling out a job application online.","Librarians help people find information and use technology for free."],
+ ["library","Walk-in","A 9th grader","“I need reliable sources for a research paper on the Dayton Peace Accords.”","Librarians teach people how to find trustworthy information."],
+ ["metroparks","Email","A science teacher","A class wants a guided field trip to study the animals that live along the Great Miami River.","Park naturalists teach about nature and help protect public parks."],
+ ["metroparks","Field report","Trail crew","After a windstorm, fallen trees block a popular trail in a county park.","MetroParks staff care for public land and keep trails safe."],
+ ["rta","Public comment","Workers at a new warehouse","“No bus goes near our warehouse, so many of us can’t get to work.”","Transit planners design bus routes that connect people to jobs, school, and stores."],
+ ["rta","Public hearing","Bus riders","Riders are upset about a proposal to cut evening service on their route.","Transit planners study ridership and hear from riders before changing service."],
+ ["auditor","Phone call","A homeowner","“The county says my house is worth way more than it is, and now my property taxes went up.”","The county auditor’s office values property, which helps set property taxes."],
+ ["auditor","Records request","Building department","A new neighborhood of 50 homes was just finished, and none of them are in the tax records yet.","Property appraisers add and value new buildings so tax records stay accurate."],
+ ["code","Phone call","A tenant","“My landlord won’t fix the broken furnace, and it’s 20 degrees outside.”","Housing code inspectors enforce rules that keep rental homes safe."],
+ ["code","Neighborhood complaint","Block club president","An abandoned house has broken windows, tall weeds, and trash being dumped in the yard.","Code inspectors cite owners of unsafe or neglected properties and push for repairs."],
+ ["juvprob","Court order","A juvenile court judge","A judge orders a 15-year-old to do community service and stay in school after a shoplifting charge.","Juvenile probation officers supervise young people on probation and help them get back on track."],
+ ["juvprob","Phone call","A worried mother","“My son is on probation, and he stopped going to school. I need help.”","Probation officers work with families, schools, and counselors to keep teens on track."],
+ ["citybudget","Request","City commissioners","Commissioners want to know if the city can afford to hire 20 more police officers next year.","Budget analysts figure out what the city can afford and how to pay for it."],
+ ["citybudget","News alert","Local business news","A large employer is leaving Dayton, so city income tax money will drop.","Budget analysts plan for changes in tax money so city services can keep running."],
+ // ---------- STATE ----------
+ ["aide","Phone call","Students from a Dayton high school","“We want a state law that pays for more school counselors. Can our state representative help?”","Legislative aides take calls from constituents and help their lawmaker research and write state bills."],
+ ["aide","Urgent request","A state representative","“I need a one-page summary of this 200-page education bill before tomorrow morning’s vote.”","Legislative aides read long bills and explain them clearly so lawmakers can vote with good information."],
+ ["ema","Emergency alert","National Weather Service, 2:40 AM","Tornadoes hit three Ohio counties overnight. The governor needs to know which towns need help first.","The Ohio EMA coordinates the state’s response when a disaster is bigger than one county can handle."],
+ ["ema","Planning meeting","The governor’s office","Ohio wants a statewide practice drill for a major river flood, with every county taking part.","Emergency management planners write disaster plans and run drills before a real emergency."],
+ ["epa","Phone call","Mr. Okafor, rural resident","“The creek behind my house smells like chemicals, and the fish are dying.”","Ohio EPA specialists investigate pollution complaints and test water, air, and soil."],
+ ["epa","Permit application","A factory on the Great Miami River","A factory asks for permission to release treated wastewater into the Great Miami River.","Environmental specialists review permits and set limits that protect Ohio’s rivers and drinking water."],
+ ["trooper","Emergency call","A driver on I-75","A semi truck has jackknifed on I-75 north of Dayton, blocking every lane.","State troopers patrol Ohio’s highways and respond to crashes."],
+ ["trooper","911 call, 1:15 AM","A driver on I-70","A car is weaving across lanes on the interstate, and the driver may be drunk.","Troopers stop dangerous drivers on state highways."],
+ ["odot","Inspection report","Bridge inspectors","Inspectors find cracks in a highway bridge over the Great Miami River.","ODOT engineers inspect, repair, and design Ohio’s roads and bridges."],
+ ["odot","Letter","A rural county commission","A county asks for a traffic light at a dangerous intersection on a state route.","Transportation engineers study crash data and decide how to make state roads safer."],
+ ["odjfs","Phone call","A laid-off factory worker","“I just lost my job. How do I apply for unemployment benefits?”","Unemployment claims specialists help laid-off workers apply for temporary benefits."],
+ ["odjfs","Data alert","State claims system","Thousands of new unemployment claims come in during one week after a big plant closes.","The state job and family services agency processes claims and helps workers find new jobs."],
+ ["wildlife","Tip line","A hunter","“Someone is shooting deer at night from a pickup truck with a spotlight.”","Wildlife officers enforce Ohio’s hunting and fishing laws."],
+ ["wildlife","Phone call","A family at Eastwood Lake","A family found an injured bald eagle near Eastwood Lake in Dayton.","Wildlife officers protect Ohio’s animals, including protected species."],
+ ["ago","Complaint form","A retired grandmother","A caller said she won a prize but must pay $500 first to collect it.","Consumer protection investigators fight scams and help victims."],
+ ["ago","Group complaint","Dozens of homeowners","Dozens of people paid a roofing company that took their money and never came back.","The Attorney General’s office investigates businesses that cheat Ohio consumers."],
+ ["sos","Directive request","County election officials","All 88 county boards of elections need the same rules for testing voting machines.","The Secretary of State’s office sets election rules for every county in Ohio."],
+ ["sos","Results deadline","Statewide election","Official results from every county must be checked and certified so winners can take office.","Elections staff certify statewide results and make sure every county followed the law."],
+ ["odh","Doctor reports","Hospitals in several counties","Doctors in several Ohio counties report a rising number of measles cases.","State epidemiologists track disease outbreaks and help stop their spread."],
+ ["odh","Research request","State lawmakers","Lawmakers want to know which Ohio counties have the highest rates of babies dying before their first birthday.","Epidemiologists study health data to find where problems are worst and why."],
+ ["odew","Email","A school district","A district asks what it must do to start a new career-technical pathway for students.","The state education department sets standards and approves programs for Ohio schools."],
+ ["odew","Phone call","A parent","“How did my child’s school score on the state report card, and what does it mean?”","Education specialists publish school report cards and explain how schools are doing."],
+ ["parole","Release notice","A state prison","A man just released from prison needs a job and housing, and must check in with an officer every week.","Parole officers supervise people after prison and help them return to their communities."],
+ ["parole","Alert","Parole office","A person on parole has missed three check-ins in a row.","Parole officers follow up when someone breaks the rules of their release."],
+ ["tax","Tip","A former employee","A store has been collecting sales tax from customers but not sending it to the state.","Tax auditors check that businesses pay the taxes they owe Ohio."],
+ ["tax","Phone call","A family","“We filed our state taxes months ago. Why hasn’t our refund come?”","The Department of Taxation processes returns and answers taxpayers’ questions."],
+ ["obm","Request","The governor","How much would it cost to give every Ohio public school student free breakfast?","State budget analysts estimate what programs cost and help build Ohio’s two-year budget."],
+ ["obm","Revenue report","Monthly tax numbers","State tax money came in lower than expected, and leaders must decide what to cut or delay.","Budget analysts track money coming in and advise leaders on what the state can afford."],
+ ["press","Media requests","Reporters across Ohio","Reporters want to know what the governor plans to do about flood damage in southern Ohio.","Press secretaries explain the governor’s decisions to the public and the news media."],
+ ["press","Social media","Confused callers","A false rumor spreads online that all state parks are closing.","Press secretaries correct false information quickly and clearly."],
+ ["develop","Site visit","A manufacturing company","A company wants to build a factory with 500 jobs and is choosing between Ohio and Indiana.","Economic development specialists work to bring new businesses and jobs to Ohio."],
+ ["develop","Grant application","A small rural town","A town wants a grant to bring high-speed internet to homes that have none.","The Department of Development awards grants for projects like rural broadband."],
+ // ---------- NATIONAL ----------
+ ["fema","Walk-in","The Lopez family, after a flood","“Our house was destroyed in the flood. How do we apply for federal disaster assistance?”","FEMA recovery specialists help survivors apply for federal aid after a disaster declaration."],
+ ["fema","Disaster declaration","The White House","The President declares a major disaster in Ohio, and federal recovery centers must open fast.","FEMA brings federal money, supplies, and staff to help states recover."],
+ ["contract","Purchase request","An Air Force engineering team","The Air Force needs replacement aircraft parts and must choose the company with the best fair bid.","Contract specialists run the process that lets the government buy what it needs fairly and legally."],
+ ["contract","Email","Owner of a small Dayton machine shop","“My company makes precision parts. How can we compete for a contract at Wright-Patterson?”","Contract specialists explain the rules for doing business with the federal government."],
+ ["casework","Phone call","A Dayton Army veteran","“My veterans’ benefits have been stuck for six months. Nobody at the agency calls me back.”","Congressional caseworkers help constituents who are stuck with a federal agency."],
+ ["casework","Walk-in","Mrs. Nguyen, Dayton resident","“My passport hasn’t arrived, and I fly to my grandmother’s funeral overseas in five days.”","Caseworkers can contact federal agencies like the passport office on a constituent’s behalf."],
+ ["nps","School request","A visiting class","A class wants to see where the Wright brothers built airplanes and learned to fly.","National Park rangers protect historic places and teach visitors their stories."],
+ ["nps","Visitor question","Tourists from Japan","“Why is a bicycle shop in Dayton part of a national park?”","Rangers explain why a place matters to the nation’s history."],
+ ["census","Assignment","Census office","A household never returned its census form, and someone must visit to count everyone who lives there.","Census field representatives count people door to door so every person is included."],
+ ["census","Question","A city council","“Why does it matter if our city’s population is counted correctly?”","The census decides how many seats each state gets in the U.S. House and guides federal funding."],
+ ["ssa","Walk-in","A woman turning 67","She has worked for 45 years and wants to start her retirement benefits.","Social Security claims specialists help people apply for retirement benefits."],
+ ["ssa","Phone call","A young man","He has a disability that keeps him from working and asks what help he can get.","Social Security also pays disability benefits to people who cannot work."],
+ ["va","Appointment","An Afghanistan veteran","A veteran needs a checkup and help managing an old injury from her deployment.","VA nurses care for veterans at VA hospitals and clinics."],
+ ["va","Hospital ward","A Vietnam veteran","An 80-year-old veteran needs care and recovery support after hip surgery.","The Department of Veterans Affairs provides health care to people who served."],
+ ["fbi","Emergency report","A hospital IT team","Hackers locked a hospital’s computers and are demanding money to unlock them.","FBI agents investigate cybercrime and ransomware attacks."],
+ ["fbi","Bulletin","Local police","A bank robbery suspect is believed to have fled across state lines.","The FBI investigates federal crimes like bank robbery."],
+ ["nws","Radar alert, 9:02 PM","Storm tracking desk","Radar shows a rotating thunderstorm heading toward Dayton.","Meteorologists at the National Weather Service issue tornado warnings."],
+ ["nws","Phone call","City road crews","Crews want to know whether a big snowstorm will hit this weekend so they can prepare plows.","Weather Service forecasts help communities plan for dangerous weather."],
+ ["faa","Radio call","Dayton International Airport","Thick fog rolls in while six planes are lined up to land.","Air traffic controllers guide planes safely through the sky and onto runways."],
+ ["faa","Mayday call","A small plane’s pilot","A pilot radios that he is lost and running low on fuel.","Controllers help pilots in trouble find a safe place to land."],
+ ["cbp","Airport inspection","An arriving international flight","A traveler’s suitcase is full of fruit and meat that were not declared.","CBP officers inspect people and goods entering the country."],
+ ["cbp","Cargo alert","A shipping port","A container from overseas may be full of fake brand-name sneakers.","Customs officers stop illegal and counterfeit goods at the border."],
+ ["nasic","Satellite imagery","Analysis team","New images show another country testing a new kind of fighter jet.","Intelligence analysts at NASIC study foreign air and space weapons."],
+ ["nasic","Request","Air Force leaders","Leaders need to know how fast a foreign missile can fly before they design defenses.","Analysts turn scattered information into reports leaders can use."],
+ ["usepa","Emergency","A train derailment","A chemical spill from a train crash threatens rivers in two states.","U.S. EPA leads cleanup of environmental emergencies, especially those that cross state lines."],
+ ["usepa","Grant request","The City of Dayton","An old factory site in Dayton is contaminated, and the city wants federal help to clean it up for new homes.","EPA specialists manage cleanup grants for polluted land."],
+ ["usps","On the route","A daily route","A carrier notices an elderly customer’s mail has piled up for four days.","Letter carriers know their neighborhoods and often notice when someone needs help."],
+ ["usps","Customer question","A small business owner","She needs an affordable way to ship packages to customers in all 50 states.","The Postal Service delivers mail and packages to every address in the country."],
+ ["senate","Briefing request","A U.S. senator","The senator votes next week on a bill funding military bases and needs a briefing.","Senate legislative assistants research issues and brief their senator before votes."],
+ ["senate","Mailbag","Ohio constituents","Thousands of Ohioans write in about a proposed national law on social media for kids.","Legislative assistants track what constituents think and help draft responses."],
+ ["clerk","Research request","A federal judge","A judge must decide whether a company broke a federal law and needs research on past rulings.","Federal law clerks research cases and help judges write decisions."],
+ ["clerk","New lawsuit","Federal courthouse","A lawsuit claims a government action violates the U.S. Constitution.","Federal courts hear constitutional cases, and clerks help judges prepare."],
+ // ---------- INTERNATIONAL ----------
+ ["fso","Walk-in at a U.S. embassy","An Ohio college student in Spain","“I lost my passport, and my flight home is tomorrow!”","Foreign Service Officers at embassies help Americans abroad, including issuing emergency passports."],
+ ["fso","Diplomatic meeting","A foreign government’s ministry","Officials of another country want to understand a new U.S. trade policy before it affects their farmers.","Diplomats explain U.S. policy to other governments and report back on what is happening abroad."],
+ ["unhcr","Field report","A border crossing, 4:00 PM","Thousands of families have fled fighting across a border and need shelter, water, and legal protection.","UNHCR protection officers make sure people fleeing war are safe and their rights are respected."],
+ ["unhcr","Interview","A mother in a refugee camp","“We cannot go home. Can my family be considered for resettlement in another country?”","Protection officers interview refugees and refer the most vulnerable families for resettlement."],
+ ["interp","Conference schedule","UN General Assembly Hall","Leaders from all 193 member countries speak this week, and every speech must be heard in six official languages.","UN interpreters translate speeches live so every country can follow and respond."],
+ ["interp","Negotiation room","Two delegations","A diplomat speaking Arabic and a diplomat speaking Chinese must negotiate a ceasefire in real time.","Interpreters make diplomacy possible when leaders do not share a language."],
+ ["peacecorps","Request","A rural school abroad","A village school needs an English teacher who will live in the community for two years.","Peace Corps Volunteers live and work in communities abroad for about two years."],
+ ["peacecorps","Community meeting","A farming town abroad","Town leaders want to start a clean-water project and need help training local volunteers.","Volunteers work side by side with local people on projects the community chooses."],
+ ["wfp","Crisis report","A drought region","A drought destroyed the harvest, and two million people need food within weeks.","Humanitarian logistics officers move huge amounts of food to people in crisis."],
+ ["wfp","Logistics alert","A flooded region","Floods washed out the roads, so food must arrive by boat and helicopter.","Logistics officers solve the problem of getting supplies where roads can’t reach."],
+ ["who","Outbreak alert","Health ministries","A new virus is spreading in several countries, and governments want guidance on how to respond.","The World Health Organization helps countries track and respond to disease outbreaks."],
+ ["who","Planning summit","Health ministers","Countries want to coordinate a vaccination campaign to wipe out polio for good.","Global health officers help countries work together on worldwide health goals."],
+ ["unicef","Emergency report","An earthquake zone","After an earthquake, thousands of children have no school to go to.","UNICEF education specialists set up temporary classrooms so learning continues in a crisis."],
+ ["unicef","Government request","A national ministry","A country wants every baby registered at birth so children can get school and health care.","UNICEF works with governments to protect children’s rights."],
+ ["wto","Dispute filing","Two member countries","Two countries are fighting over tariffs on steel and want a neutral body to settle it.","The World Trade Organization helps countries settle trade disputes under shared rules."],
+ ["wto","Data request","Member governments","Countries want to know how new tariffs are changing trade around the world.","Trade economists study the flow of goods between countries."],
+ ["resettle","Arrival notice","Dayton International Airport, 9:30 PM","A refugee family from Congo lands tonight and needs an apartment and a warm meal.","Resettlement caseworkers welcome refugee families and help them start new lives."],
+ ["resettle","Walk-in","A newly arrived father","He needs help finding his first U.S. job and enrolling his children in school.","Caseworkers connect refugees to jobs, schools, and English classes."],
+ ["ohchr","Urgent report","Human rights groups","Reports say peaceful protesters in another country are being jailed without trials.","UN human rights officers investigate abuses and press governments to protect rights."],
+ ["ohchr","Agreement","A national government","A country agrees to let UN investigators review how it treats prisoners.","Human rights officers visit, document, and report on conditions."],
+ ["osce","Invitation","A country’s election commission","A country holding its first election in years invites international observers to watch the vote count.","Election observers watch elections and report on whether they were free and fair."],
+ ["osce","Complaint","Opposition parties","Opposition parties claim an election was rigged and ask for an independent report.","Observers give neutral assessments that voters and governments can trust."],
+ ["peacekeep","Mission report","Two towns after a ceasefire","Towns that fought each other need help rebuilding trust and local government.","Civil affairs officers help communities rebuild after conflict."],
+ ["peacekeep","Field report","Villagers in a conflict zone","Villagers say armed groups are threatening them at night.","UN peacekeeping missions work to protect civilians in conflict zones."],
+ ["worldbank","Loan request","A national government","A country wants a loan to build power lines so rural villages can get electricity.","The World Bank lends money and advice to help countries reduce poverty."],
+ ["worldbank","Research question","Government leaders","Leaders want to know if paying families to keep kids in school actually works.","Development economists test which programs really help people."],
+ ["icrc","Family request","Families in a war zone","Families separated by war are desperate to learn whether missing relatives are alive.","The Red Cross helps reconnect families torn apart by war."],
+ ["icrc","Prison visit","Prisoners of war","Someone must check that prisoners of war are being treated humanely.","Red Cross delegates visit detainees under the Geneva Conventions."],
+ ["nato","Crisis meeting","Allied governments","Allies must agree on how to defend a member country that feels threatened.","NATO policy officers help allied countries plan their common defense."],
+ ["nato","Summit prep","Defense ministers","Defense ministers from all 32 NATO members meet, and someone must draft their joint statement.","NATO staff write the agreements that member countries sign together."],
+ ["iaea","Inspection","A nuclear power plant abroad","Inspectors must confirm a country’s nuclear plant is not secretly making material for weapons.","IAEA inspectors verify that nuclear material is used only for peaceful purposes."],
+ ["iaea","Request","A country’s health ministry","A country wants help using nuclear medicine to treat cancer patients safely.","The IAEA also helps countries use nuclear technology for health and energy."]
+];
+
+const LEVELS = {
+  local:{name:'Local',sub:'Dayton · Montgomery Co.',cls:'lv-local'},
+  state:{name:'State',sub:'Columbus · Ohio',cls:'lv-state'},
+  national:{name:'National',sub:'U.S. federal government',cls:'lv-national'},
+  intl:{name:'International',sub:'The world',cls:'lv-intl'}
+};
+const ORDER = ['local','state','national','intl'];
+const J = {}; JOBS.forEach(([id,level,title,dept,loc]) => J[id] = {id,level,title,dept,loc});
+const BYLEVEL = {}; ORDER.forEach(l => BYLEVEL[l] = JOBS.filter(j => j[1]===l).map(j => j[0]));
+const C = CASES.map(([job,channel,from,text,why]) => ({job,channel,from,text,why}));
+
+let S;
+// Random source: Math.random for practice, a seeded generator for class challenges so every student gets the same game.
+let rand = Math.random;
+function strHash(s){ let h = 2166136261 >>> 0; for(const ch of s){ h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; }
+function seeded(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const shuffle = a => { a = a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(rand()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+// Challenge links look like #challenge-word-20-show
+function parseChallenge(h){
+  const m = /^#?challenge-([a-z0-9]{2,20})-(12|20|32)-(show|hide)$/i.exec(h || '');
+  return m ? {code:m[1].toLowerCase(), len:+m[2], hard:m[3].toLowerCase()==='hide'} : null;
+}
+function challengeHash(ch){ return `challenge-${ch.code}-${ch.len}-${ch.hard?'hide':'show'}`; }
+const B32 = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function resultCode(code, name, score, secs){
+  let h = strHash(`psa|${code}|${name.trim().toLowerCase()}|${score}|${secs}`), out = '';
+  for(let i=0;i<6;i++){ out += B32[h % B32.length]; h = Math.floor(h / B32.length) ^ strHash(out + i); h >>>= 0; }
+  return out;
+}
+const joinCode = ch => `${ch.code}-${ch.len}${ch.hard?'H':'S'}`.toUpperCase();
+function parseJoin(v){
+  const m = /^([a-z0-9]{2,20})-(12|20|32)([sh])$/i.exec((v||'').trim().replace(/\s+/g,''));
+  return m ? {code:m[1].toLowerCase(), len:+m[2], hard:m[3].toLowerCase()==='h'} : null;
+}
+const fmtTime = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+// Draw cases: balanced across levels, no job twice in one game, prefer cases not yet seen this session.
+function drawDeck(n, seen){
+  const per = Math.floor(n/4), extra = n - per*4;
+  const quotas = {}; shuffle(ORDER).forEach((l,i) => quotas[l] = per + (i < extra ? 1 : 0));
+  const deck = [];
+  ORDER.forEach(l => {
+    const jobs = shuffle(BYLEVEL[l]).slice(0, quotas[l]);
+    jobs.forEach(jid => {
+      const opts = C.map((c,i)=>[c,i]).filter(([c]) => c.job===jid).map(([,i])=>i);
+      const fresh = opts.filter(i => !seen.includes(i));
+      const pool = fresh.length ? fresh : opts;
+      deck.push(pool[Math.floor(rand()*pool.length)]);
+    });
+  });
+  return shuffle(deck);
+}
+// Each round: the right office, two more from its level, three from each other level.
+function dealOffices(caseIdx){
+  const right = C[caseIdx].job, lvl = J[right].level;
+  const ids = [right];
+  ORDER.forEach(l => {
+    const pool = shuffle(BYLEVEL[l].filter(id => id!==right));
+    ids.push(...pool.slice(0, l===lvl ? 2 : 3));
+  });
+  return shuffle(ids);
+}
+function fresh(keep, ch){
+  rand = ch ? seeded(strHash(`${ch.code}|${ch.len}`)) : Math.random;
+  const len = ch ? ch.len : (keep ? keep.len : 12);
+  const seen = ch ? [] : (keep ? keep.seen : []);
+  const deck = drawDeck(len, seen);
+  const allOffices = deck.map(dealOffices);
+  const caseBase = 400 + Math.floor(rand()*500);
+  rand = Math.random;
+  return { len, seen, deck, allOffices, offices: allOffices[0], round:0, tries:0, wrong:[], done:false, over:false,
+    teams: ch ? false : (keep ? keep.teams : false), hard: ch ? ch.hard : (keep ? keep.hard : false), bank:false,
+    scores:[0,0], turn:0, streak:0, best:0, perLevel:{local:0,state:0,national:0,intl:0}, missed:[],
+    caseBase, deal:true, enter:true, ch: ch || null, phase: ch ? 'intro' : 'play', name:'', t0:null, secs:0, panel:null, msg:'' };
+}
+const sameCh = (a,b) => JSON.stringify(a||null) === JSON.stringify(b||null);
+let creating = false;
+function start(data){
+  const ch = parseChallenge(location.hash);
+  S = (data && data.deck && data.allOffices && data.len && sameCh(data.ch, ch)) ? data : fresh(null, ch);
+  bind(); render(); tick();
+  window.addEventListener('hashchange', () => {
+    const c = parseChallenge(location.hash);
+    if(sameCh(c, S.ch)) return;
+    const keep = S; S = fresh(keep, c);
+    if(creating){ S.panel = 'teacher'; S.msg = 'created'; creating = false; }
+    render();
+  });
+}
+window.claude?.hot?.snapshot?.(() => JSON.parse(JSON.stringify(S)));
+let timer = null;
+function tick(){
+  clearInterval(timer);
+  timer = setInterval(() => { if(S.ch && S.phase==='play' && !S.over && !S.panel) meters(); }, 1000);
+}
+function elapsed(){ return S.t0 ? Math.max(0, Math.round((Date.now() - S.t0)/1000)) : 0; }
+
+function bind(){
+  document.getElementById('mode-solo').onclick = () => { S.teams=false; restartKeep(); };
+  document.getElementById('mode-teams').onclick = () => { S.teams=true; restartKeep(); };
+  document.getElementById('diff-easy').onclick = () => { S.hard=false; render(); };
+  document.getElementById('diff-hard').onclick = () => { S.hard=true; render(); };
+  document.querySelectorAll('[data-len]').forEach(b => b.onclick = () => { S.len = +b.dataset.len; restartKeep(); });
+  document.getElementById('restart').onclick = restartKeep;
+  document.getElementById('bankbtn').onclick = () => { S.bank = !S.bank; S.panel = null; render(); };
+  document.getElementById('joinbtn').onclick = () => { S.panel = 'join'; S.bank=false; render(); };
+  document.getElementById('teachbtn').onclick = () => { S.panel = S.panel ? null : 'teacher'; S.msg=''; S.bank=false; render(); };
+}
+function restartKeep(){ S = fresh(S, S.ch); render(); }
+function leaveChallenge(){ try { history.replaceState(null, '', location.pathname + location.search); } catch(e){ try { location.hash = ''; } catch(_){} } S = fresh(S, null); render(); }
+
+const PIN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
+
+function meters(){
+  const n = S.deck.length;
+  let h = `<div class="meter"><b>${Math.min(S.round+1,n)}/${n}</b><span>Case</span></div>`;
+  if(S.teams){
+    h += `<div class="meter ${S.turn===0&&!S.over?'active':''}"><b>${S.scores[0]}</b><span>Team A</span></div>`;
+    h += `<div class="meter ${S.turn===1&&!S.over?'active':''}"><b>${S.scores[1]}</b><span>Team B</span></div>`;
+  } else {
+    h += `<div class="meter"><b>${S.scores[0]}</b><span>Points of ${n*2}</span></div>`;
+    h += `<div class="meter"><b>${S.streak}</b><span>Streak</span></div>`;
+  }
+  if(S.ch){
+    const t = S.over ? S.secs : elapsed();
+    h = `<div class="meter"><b>${Math.min(S.round+1,n)}/${n}</b><span>Case</span></div><div class="meter"><b>${S.scores[0]}</b><span>Points of ${n*2}</span></div><div class="meter active"><b>${fmtTime(t)}</b><span>Time</span></div>`;
+  } else {
+    h += `<div class="meter"><b>${C.length - new Set(S.seen.concat(S.deck.slice(0,S.round+1))).size}</b><span>Unseen cases</span></div>`;
+  }
+  document.getElementById('meters').innerHTML = h;
+  const set = (id,v) => document.getElementById(id).setAttribute('aria-pressed', String(v));
+  set('mode-solo',!S.teams); set('mode-teams',S.teams); set('diff-easy',!S.hard); set('diff-hard',S.hard); set('bankbtn',S.bank);
+  document.querySelectorAll('[data-len]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.len===S.len)));
+  document.getElementById('bankbtn').textContent = S.bank ? 'Back to the game' : 'Job bank (64)';
+  set('teachbtn', S.panel==='teacher');
+  document.getElementById('teachbtn').textContent = S.panel==='teacher' ? 'Back to the game' : 'Teacher: class challenge';
+  document.getElementById('controls').hidden = !!S.ch && S.panel!=='teacher';
+}
+
+function cardHTML(id){
+  const c = J[id], ev = C[S.deck[S.round]];
+  let cls = 'card ' + LEVELS[c.level].cls;
+  if(S.wrong.includes(id)) cls += ' wrong';
+  if(S.done && id===ev.job) cls += S.lastRight ? ' right' : ' reveal';
+  const dis = (S.done || S.wrong.includes(id)) ? 'disabled' : '';
+  const lvl = S.hard ? '' : `<span class="sr">${LEVELS[c.level].name} level. </span>`;
+  return `<button type="button" class="${cls}" data-id="${id}" ${dis}>${lvl}<span class="t">${esc(c.title)}</span><span class="d">${esc(c.dept)}</span><span class="l">${PIN}<span>${esc(c.loc)}</span></span></button>`;
+}
+function directory(){
+  let cols;
+  if(S.hard){
+    const ids = S.offices;
+    cols = [0,1,2,3].map(k => `<div class="col">${ids.slice(k*3,k*3+3).map(cardHTML).join('')}</div>`).join('');
+  } else {
+    cols = ORDER.map(l => {
+      const L = LEVELS[l];
+      return `<div class="col ${L.cls}"><div class="col-label">${L.name}<small>${L.sub}</small></div>${S.offices.filter(id => J[id].level===l).map(cardHTML).join('')}</div>`;
+    }).join('');
+  }
+  return `<section class="right ${S.hard?'hard':''}" aria-label="Office directory">
+    <div class="dir-head"><h2>Today’s Directory</h2><p>${S.hard ? 'Levels hidden. Use the department and location as clues.' : 'Twelve offices on duty this round, dealt from 64.'}</p></div>
+    <div class="cols ${S.deal?'deal':''}">${cols}</div></section>`;
+}
+function ticket(){
+  const ev = C[S.deck[S.round]];
+  const caseNo = 'CASE 2026-' + String(S.caseBase + S.round).padStart(4,'0');
+  const stamp = S.done ? (S.lastRight ? '<div class="stamp ok">Routed</div>' : '<div class="stamp no">Missed</div>') : '';
+  const who = S.teams ? `Team ${S.turn===0?'A':'B'}: who takes this case?` : 'Who takes this case?';
+  let fb;
+  if(S.done){
+    const c = J[ev.job];
+    const head = S.lastRight ? (S.lastPts===2 ? 'Correct on the first try. +2' : 'Correct on the second try. +1') : 'This case belongs to:';
+    fb = `<div class="feedback" role="status"><h2>${head}</h2>
+      <p class="who">${esc(c.title)} · ${LEVELS[c.level].name}</p>
+      <p>${esc(c.dept)}<br><span style="color:var(--muted)">${esc(c.loc)}</span></p>
+      <p>${esc(ev.why)}</p>
+      <button type="button" class="next" id="next">${S.round+1 >= S.deck.length ? 'See results' : 'Next case'}</button></div>`;
+  } else if(S.wrong.length){
+    fb = `<p class="hint" role="status">Not that office. One more try for 1 point${S.teams?' for the same team':''}.</p>`;
+  } else {
+    fb = `<p class="hint">Pick the office from today’s directory. First try earns 2 points, second try earns 1.</p>`;
+  }
+  return `<section class="left" aria-label="Incoming case"><article class="ticket ${S.enter?'enter':''}">
+    <div class="ticket-head"><span>${caseNo}</span><span>INCOMING</span></div>${stamp}
+    <div class="ticket-body"><span class="channel">${esc(ev.channel)}</span><div class="from">From: ${esc(ev.from)}</div>
+    <p class="event">${esc(ev.text)}</p><div class="prompt">${who}</div></div></article>${fb}</section>`;
+}
+function endScreen(){
+  const totals = {local:0,state:0,national:0,intl:0};
+  S.deck.forEach(i => totals[J[C[i].job].level] += 2);
+  const tiles = ORDER.map(l => `<div class="tile" style="--lv:var(--${l})"><b>${S.perLevel[l]}/${totals[l]}</b><span>${LEVELS[l].name} points</span></div>`).join('');
+  let headline;
+  if(S.teams){ const [a,b] = S.scores; headline = a===b ? `Tie game, ${a} to ${b}` : `Team ${a>b?'A':'B'} wins, ${Math.max(a,b)} to ${Math.min(a,b)}`; }
+  else headline = `${S.scores[0]} of ${S.deck.length*2} points`;
+  const rev = S.missed.length ? S.missed.map(i => { const e=C[i], c=J[e.job]; return `<div class="rev"><span>${esc(e.text)}</span><span class="ans">${esc(c.title)}, ${esc(c.dept)} (${LEVELS[c.level].name})</span></div>`; }).join('') : '<p class="hint">No missed cases. Every call reached the right office.</p>';
+  const unseen = C.length - new Set(S.seen.concat(S.deck)).size;
+  return `<section class="end" aria-label="Results"><div class="eyebrow">Shift complete · ${S.deck.length} cases · ${unseen} cases still unseen this session</div>
+    <h2>${headline}</h2>${S.teams ? '' : `<p class="hint">Best streak: ${S.best} in a row.</p>`}
+    <div class="tiles">${tiles}</div><div class="review"><h3>Cases to review</h3>${rev}</div>
+    <div class="end-actions"><button type="button" class="next" id="again">Play again with new cases</button></div></section>`;
+}
+function bankView(){
+  const secs = ORDER.map(l => `<div class="bank-sec" style="--lv:var(--${l})"><h3>${LEVELS[l].name} · ${LEVELS[l].sub}</h3><div class="bank-grid">${BYLEVEL[l].map(id => { const c=J[id]; return `<div class="bank-item"><span class="t">${esc(c.title)}</span><span class="d">${esc(c.dept)}</span><span class="l">${esc(c.loc)}</span></div>`; }).join('')}</div></div>`).join('');
+  return `<section class="bank" aria-label="Job bank"><div class="eyebrow">All 64 offices · 128 cases in the deck</div><h2>Job Bank</h2>
+    <p class="hint">Study these before you play. Each game deals 12 of them into the directory every round.</p>${secs}</section>`;
+}
+function render(){
+  meters();
+  const main = document.getElementById('main');
+  if(S.panel==='teacher'){ main.innerHTML = teacherView(); wireTeacher(); return; }
+  if(S.panel==='join'){ main.innerHTML = joinView(); wireJoin(); return; }
+  if(S.bank){ main.innerHTML = bankView(); return; }
+  if(S.ch && S.phase==='intro'){ main.innerHTML = introView(); wireIntro(); return; }
+  if(S.over){
+    if(S.ch){ main.innerHTML = challengeEnd(); wireChallengeEnd(); return; }
+    main.innerHTML = endScreen(); document.getElementById('again').onclick = () => { S.seen = Array.from(new Set(S.seen.concat(S.deck))); if(S.seen.length >= C.length) S.seen = []; restartKeep(); }; return;
+  }
+  const banner = S.ch ? `<div class="chbar"><span><b>Class challenge:</b> ${esc(S.ch.code.toUpperCase())} · ${esc(S.name)}</span><span>Same ${S.ch.len} cases for everyone. Fastest high score wins.</span></div>` : '';
+  main.innerHTML = `${banner}<div class="desk">${ticket()}${directory()}</div>`;
+  S.deal = false; S.enter = false;
+  main.querySelectorAll('.card').forEach(b => b.addEventListener('click', () => pick(b.dataset.id)));
+  const n = document.getElementById('next'); if(n){ n.onclick = next; n.focus({preventScroll:true}); }
+}
+function introView(){
+  const ch = S.ch;
+  return `<section class="panel" aria-label="Class challenge"><div class="eyebrow">Class challenge · ${joinCode(ch)}</div>
+    <h2>Ready to take the calls?</h2>
+    <ul class="rules">
+      <li>You get <b>${ch.len} cases</b>. Everyone in your class gets the same cases in the same order.</li>
+      <li>For each case, pick the office that should handle it. First try: 2 points. Second try: 1 point.</li>
+      <li>Levels are <b>${ch.hard ? 'hidden' : 'shown'}</b>. The clock starts when you press Start. Highest score wins; time breaks ties.</li>
+      <li>At the end you get a <b>result code</b>. Give your teacher your name, score, time, and code.</li>
+    </ul>
+    <form class="form" id="introform">
+      <label for="pname">Your name (first name and last initial)</label>
+      <input id="pname" name="pname" type="text" maxlength="40" autocomplete="off" required value="${esc(S.name)}">
+      <p class="err" id="perr" role="alert"></p>
+      <div class="end-actions"><button type="submit" class="next">Start the challenge</button></div>
+    </form>
+    <p class="hint">Not part of a class challenge? <button type="button" class="linkbtn" id="leave">Play practice mode instead</button></p>
+  </section>`;
+}
+function wireIntro(){
+  document.getElementById('introform').addEventListener('submit', e => {
+    e.preventDefault();
+    const v = document.getElementById('pname').value.trim();
+    if(v.length < 2){ document.getElementById('perr').textContent = 'Type your name so your teacher knows whose score this is.'; return; }
+    S.name = v; S.phase = 'play'; S.t0 = Date.now(); S.enter = true; S.deal = true; render();
+  });
+  document.getElementById('leave').onclick = leaveChallenge;
+  document.getElementById('pname').focus({preventScroll:true});
+}
+function challengeEnd(){
+  const n = S.deck.length, code = resultCode(S.ch.code, S.name, S.scores[0], S.secs);
+  const totals = {local:0,state:0,national:0,intl:0};
+  S.deck.forEach(i => totals[J[C[i].job].level] += 2);
+  const tiles = ORDER.map(l => `<div class="tile" style="--lv:var(--${l})"><b>${S.perLevel[l]}/${totals[l]}</b><span>${LEVELS[l].name} points</span></div>`).join('');
+  const rev = S.missed.length ? S.missed.map(i => { const e=C[i], c=J[e.job]; return `<div class="rev"><span>${esc(e.text)}</span><span class="ans">${esc(c.title)}, ${esc(c.dept)} (${LEVELS[c.level].name})</span></div>`; }).join('') : '<p class="hint">No missed cases. Every call reached the right office.</p>';
+  return `<section class="end" aria-label="Challenge results"><div class="eyebrow">Class challenge ${esc(S.ch.code.toUpperCase())} · complete</div>
+    <div class="result">
+      <div><span>Name</span><b>${esc(S.name)}</b></div>
+      <div><span>Score</span><b>${S.scores[0]} / ${n*2}</b></div>
+      <div><span>Time</span><b>${fmtTime(S.secs)}</b></div>
+      <div class="code"><span>Result code</span><b>${code}</b></div>
+    </div>
+    <p class="hint">Show this screen to your teacher, or copy your result and send it the way your teacher asked.</p>
+    <div class="end-actions"><button type="button" class="next" id="copyres">Copy my result</button><span class="hint" id="copymsg" role="status"></span></div>
+    <div class="tiles">${tiles}</div>
+    <div class="review"><h3>Cases to review</h3>${rev}</div>
+    <p class="hint"><button type="button" class="linkbtn" id="leave">Keep practicing in practice mode</button></p></section>`;
+}
+function wireChallengeEnd(){
+  const code = resultCode(S.ch.code, S.name, S.scores[0], S.secs);
+  const text = `Who Takes the Call? challenge ${S.ch.code.toUpperCase()} | ${S.name} | ${S.scores[0]}/${S.deck.length*2} points | ${fmtTime(S.secs)} | code ${code}`;
+  document.getElementById('copyres').onclick = async () => {
+    const m = document.getElementById('copymsg');
+    try { await navigator.clipboard.writeText(text); m.textContent = 'Copied. Paste it where your teacher asked.'; }
+    catch(e){ m.textContent = 'Copy did not work here. Write down your score, time, and code.'; }
+  };
+  document.getElementById('leave').onclick = leaveChallenge;
+}
+function joinView(){
+  return `<section class="panel" aria-label="Join a class challenge"><div class="eyebrow">Class challenge</div><h2>Join a Challenge</h2>
+    <form class="form" id="joinform">
+      <label for="jcode">Challenge code from your teacher</label>
+      <input id="jcode" type="text" maxlength="30" autocomplete="off" placeholder="for example PERIOD3-20H" style="text-transform:uppercase">
+      <p class="err" id="jerr" role="alert"></p>
+      <div class="end-actions"><button type="submit" class="next">Join</button><button type="button" class="textbtn" id="jcancel">Back to practice</button></div>
+    </form></section>`;
+}
+function wireJoin(){
+  document.getElementById('joinform').addEventListener('submit', e => {
+    e.preventDefault();
+    const ch = parseJoin(document.getElementById('jcode').value);
+    if(!ch){ document.getElementById('jerr').textContent = 'That code does not look right. It looks like PERIOD3-20H. Check with your teacher.'; return; }
+    S = fresh(S, ch); render();
+  });
+  document.getElementById('jcancel').onclick = () => { S.panel = null; render(); };
+  document.getElementById('jcode').focus({preventScroll:true});
+}
+function teacherView(){
+  const cur = S.ch;
+  const made = S.msg==='created' && cur ? `<div class="okbox" role="status"><b>Challenge ready. Join code: <code style="font-size:18px">${joinCode(cur)}</code></b><br>Students open the game, click <b>Join a class challenge</b>, and type that code. Everyone who types it gets the same ${cur.len} cases.</div>` : (cur ? `<div class="okbox">Current challenge join code: <code style="font-size:18px">${joinCode(cur)}</code></div>` : '');
+  return `<section class="panel" aria-label="Teacher tools"><div class="eyebrow">Teacher tools</div><h2>Class Challenge</h2>
+    <p class="hint">A challenge gives every student the same cases in the same order, with a timer and a result code you can check. No student accounts needed.</p>
+    ${made}
+    <form class="form" id="makeform">
+      <h3>1. Create a challenge link</h3>
+      <label for="ccode">Challenge code word (letters and numbers, 2 to 20)</label>
+      <input id="ccode" type="text" maxlength="20" autocomplete="off" value="${esc(cur ? cur.code : '')}" placeholder="for example period3">
+      <div class="row">
+        <div><label for="clen">Number of cases</label><select id="clen">${[12,20,32].map(n => `<option value="${n}" ${(cur?cur.len:20)===n?'selected':''}>${n}</option>`).join('')}</select></div>
+        <div><label for="chard">Levels</label><select id="chard"><option value="show" ${cur&&!cur.hard?'selected':''}>Shown</option><option value="hide" ${cur&&cur.hard?'selected':''}>Hidden (harder)</option></select></div>
+      </div>
+      <p class="err" id="cerr" role="alert"></p>
+      <div class="end-actions"><button type="submit" class="next">Create challenge</button>${cur ? '<button type="button" class="textbtn" id="endch">Turn off challenge</button>' : ''}</div>
+    </form>
+    <form class="form" id="checkform">
+      <h3>2. Check a student’s result</h3>
+      <div class="row">
+        <div><label for="kcode">Challenge code word</label><input id="kcode" type="text" maxlength="20" autocomplete="off" value="${esc(cur ? cur.code : '')}"></div>
+        <div><label for="kname">Student name, as they typed it</label><input id="kname" type="text" maxlength="40" autocomplete="off"></div>
+      </div>
+      <div class="row">
+        <div><label for="kscore">Score (points)</label><input id="kscore" type="number" min="0" max="64" inputmode="numeric"></div>
+        <div><label for="ktime">Time (m:ss)</label><input id="ktime" type="text" maxlength="6" placeholder="4:35" autocomplete="off"></div>
+        <div><label for="kres">Result code</label><input id="kres" type="text" maxlength="6" autocomplete="off" style="text-transform:uppercase"></div>
+      </div>
+      <div class="end-actions"><button type="submit" class="next">Check result</button><span id="kmsg" class="verdict" role="status"></span></div>
+    </form>
+    <p class="hint">A matching code means the name, score, and time were not changed after the game ended. Students can replay a challenge, so ask for their first result.</p>
+  </section>`;
+}
+function wireTeacher(){
+  document.getElementById('makeform').addEventListener('submit', e => {
+    e.preventDefault();
+    const code = document.getElementById('ccode').value.trim().toLowerCase();
+    if(!/^[a-z0-9]{2,20}$/.test(code)){ document.getElementById('cerr').textContent = 'Use 2 to 20 letters or numbers, with no spaces.'; return; }
+    const ch = {code, len:+document.getElementById('clen').value, hard: document.getElementById('chard').value==='hide'};
+    S = fresh(S, ch); S.panel = 'teacher'; S.msg = 'created';
+    try { history.replaceState(null, '', '#' + challengeHash(ch)); } catch(_){}
+    render();
+  });
+  const endBtn = document.getElementById('endch');
+  if(endBtn) endBtn.onclick = () => { leaveChallenge(); S.panel='teacher'; render(); };
+  document.getElementById('checkform').addEventListener('submit', e => {
+    e.preventDefault();
+    const code = document.getElementById('kcode').value.trim().toLowerCase();
+    const name = document.getElementById('kname').value;
+    const score = parseInt(document.getElementById('kscore').value, 10);
+    const tm = /^(\d{1,3}):([0-5]\d)$/.exec(document.getElementById('ktime').value.trim());
+    const res = document.getElementById('kres').value.trim().toUpperCase();
+    const out = document.getElementById('kmsg');
+    if(!code || !name.trim() || isNaN(score) || !tm || res.length!==6){ out.className='verdict bad'; out.textContent = 'Fill in every box. Time looks like 4:35.'; return; }
+    const ok = resultCode(code, name, score, (+tm[1])*60 + (+tm[2])) === res;
+    out.className = 'verdict ' + (ok ? 'good' : 'bad');
+    out.textContent = ok ? 'Valid result.' : 'Does not match. Check the spelling of the name and each number.';
+  });
+}
+function pick(id){
+  if(S.done || S.wrong.includes(id)) return;
+  const ev = C[S.deck[S.round]];
+  S.tries++;
+  const team = S.teams ? S.turn : 0;
+  if(id === ev.job){
+    const pts = S.tries===1 ? 2 : 1;
+    S.scores[team] += pts; S.perLevel[J[ev.job].level] += pts;
+    S.lastRight = true; S.lastPts = pts; S.done = true;
+    S.streak = S.tries===1 ? S.streak+1 : 0; S.best = Math.max(S.best, S.streak);
+  } else {
+    S.wrong.push(id);
+    if(S.tries >= 2){ S.lastRight=false; S.lastPts=0; S.done=true; S.streak=0; S.missed.push(S.deck[S.round]); }
+  }
+  render();
+}
+function next(){
+  if(S.round+1 >= S.deck.length){ S.over = true; if(S.ch) S.secs = elapsed(); render(); window.scrollTo({top:0}); return; }
+  S.round++; S.tries=0; S.wrong=[]; S.done=false; S.lastRight=false; S.enter=true; S.deal=true;
+  S.offices = S.allOffices[S.round];
+  if(S.teams) S.turn = 1 - S.turn;
+  render();
+}
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
+</body>
+</html>
